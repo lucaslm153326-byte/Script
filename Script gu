@@ -1,0 +1,137 @@
+-- LocalScript em StarterPlayer/StarterPlayerScripts
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Só funciona em mobile (opcional - remova o if se quiser testar no PC)
+if not UserInputService.TouchEnabled then
+	warn("Este script é para celular.")
+end
+
+-- Cria a GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HighlightHumansGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Botão
+local botao = Instance.new("TextButton")
+botao.Size = UDim2.new(0, 120, 0, 60)
+botao.Position = UDim2.new(0, 20, 0.5, -30)
+botao.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+botao.TextColor3 = Color3.fromRGB(255, 255, 255)
+botao.Text = "Destacar\nHumanos"
+botao.TextScaled = true
+botao.Font = Enum.Font.GothamBold
+botao.Parent = screenGui
+
+local canto = Instance.new("UICorner")
+canto.CornerRadius = UDim.new(0, 10)
+canto.Parent = botao
+
+-- Guarda os highlights ativos
+local highlights = {}
+local ativo = false
+
+-- Função para verificar se é um humano (não é NPC, tem personagem vivo)
+local function ehHumanoValido(plr)
+	if plr == player then return false end -- ignora você mesmo
+	local char = plr.Character
+	if not char then return false end
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then return false end
+	return true
+end
+
+-- Função para criar/destruir highlight
+local function aplicarHighlight(plr)
+	if not ehHumanoValido(plr) then return end
+	local char = plr.Character
+	if not char then return end
+
+	if highlights[plr] then return end
+
+	local hl = Instance.new("Highlight")
+	hl.Name = "HumanHighlight"
+	hl.FillColor = Color3.fromRGB(255, 0, 0)
+	hl.OutlineColor = Color3.fromRGB(255, 0, 0)
+	hl.FillTransparency = 0.5
+	hl.OutlineTransparency = 0
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Adornee = char
+	hl.Parent = char
+
+	highlights[plr] = hl
+end
+
+local function removerHighlight(plr)
+	if highlights[plr] then
+		highlights[plr]:Destroy()
+		highlights[plr] = nil
+	end
+end
+
+local function limparTudo()
+	for plr, hl in pairs(highlights) do
+		if hl then hl:Destroy() end
+	end
+	highlights = {}
+end
+
+local function ativarHighlights()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		aplicarHighlight(plr)
+	end
+	ativo = true
+	botao.BackgroundColor3 = Color3.fromRGB(40, 180, 40)
+	botao.Text = "Remover\nDestaque"
+end
+
+local function desativarHighlights()
+	limparTudo()
+	ativo = false
+	botao.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+	botao.Text = "Destacar\nHumanos"
+end
+
+-- Botão clicado
+botao.MouseButton1Click:Connect(function()
+	if ativo then
+		desativarHighlights()
+	else
+		ativarHighlights()
+	end
+end)
+
+-- Atualiza highlights quando alguém entra/sai ou respawna
+Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function()
+		if ativo then
+			task.wait(0.5) -- espera o personagem carregar
+			aplicarHighlight(plr)
+		end
+	end)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+	removerHighlight(plr)
+end)
+
+-- Atualiza periodicamente para pegar respawns
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if ativo then
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if ehHumanoValido(plr) and not highlights[plr] then
+					aplicarHighlight(plr)
+				elseif highlights[plr] and not ehHumanoValido(plr) then
+					removerHighlight(plr)
+				end
+			end
+		end
+	end
+end)
